@@ -31,6 +31,9 @@ enum class ReadResult
 	Error
 };
 
+
+
+
 struct ClientConnection
 {
 	~ClientConnection() { this->freeHandle(); }

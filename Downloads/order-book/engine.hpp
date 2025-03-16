@@ -7,14 +7,59 @@
 #include <chrono>
 
 #include "io.hpp"
+#include <queue>
 
 struct Engine
 {
 public:
 	void accept(ClientConnection conn);
+    void processClientCommand(const ClientCommand& cmd);
+
+// function signatures for more specific order processing
+
+    void processBuyOrder(const ClientCommand& cmd);
+    void processSellOrder(const ClientCommand& cmd);
+    void processCancelOrder(const ClientCommand& cmd);
 
 private:
 	void connection_thread(ClientConnection conn);
+    struct Order {
+		// uint32_t is used ahead of a plain int because ensures non negative values, guaranteed to be 32 bits on all platforms, can be more memory efficient 
+        uint32_t order_id;
+        uint32_t price;
+        uint32_t quantity;
+        std::string instrument;
+		bool cancelled = false;
+        uint64_t sequence;  // increasing sequence for order of arrival
+    };
+
+    // buy orders (max-heap: higher price first, then earlier sequence)
+    struct BuyComparator {
+        bool operator()(const Order& a, const Order& b) const {
+            if (a.price == b.price)
+                return a.sequence > b.sequence;  
+            return a.price < b.price;
+        }
+    };
+
+    // sell orders (min-heap: lower price first, then earlier sequence)
+    struct SellComparator {
+        bool operator()(const Order& a, const Order& b) const {
+            if (a.price == b.price)
+                return a.sequence > b.sequence;
+            return a.price > b.price;
+        }
+    };
+		
+    std::unordered_map<std::string, std::priority_queue<Order, std::vector<Order>, BuyComparator>> buyOrderBooks;
+    std::unordered_map<std::string, std::priority_queue<Order, std::vector<Order>, SellComparator>> sellOrderBooks;
+
+	// in cpp cannot have values that are Order& bc references cannot be reassigned 
+	std::unordered_map<uint32_t, Order*> orderMap;
+    
+	// sequence number of order
+	uint64_t nextSequence = 0;
+
 };
 
 // Normally defining a function in a header file causes multiple definition errors if that header is included in multiple .cpp files
@@ -51,5 +96,8 @@ inline std::chrono::microseconds::rep getCurrentTimestamp() noexcept
 {
 	return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
 }
+
+
+
 
 #endif
