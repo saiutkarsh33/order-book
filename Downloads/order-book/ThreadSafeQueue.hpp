@@ -52,12 +52,22 @@ public:
     }
 
     // Wait until an item is available, then pop it.
+    // As you can see, there is no return value, you could use move smeantics in modern C++ to elimate most copy overhead
+    // but this is consistent design for a thread safe queue implementation
+    // I was thinking y not j return result then if used elsewhere use move semantics or just use the reference of the result but i guess its j a design pattern for cleaner code
     void wait_pop(T& result) {
+        // locks the mutex to protect access to the underlying queue q
+        // need to acquire lock bc want exclusive access to the queue when checking if empty, reading front and popping
         std::unique_lock<std::mutex> lock(mtx);
-        // released the mutex, held in lock and puts the thread to sleep until this condition variable is notified
+        // released mutex and puts thread to sleep until the cv has been notified.
+        // if thread is woken up, automatically re acquires the mutex before proceeding
+        // The lambda predicate ([this]() { return !q.empty(); }) is checked each time the thread wakes up. The thread only proceeds if the queue is not empty.
+        // this prevents busy waiting
         cv.wait(lock, [this]() { return !q.empty(); });
+        // efficient transfer the elements resources to result instead of copying it
         result = std::move(q.front());
         q.pop();
+        // once the function exits, the std:: unique lock goes out of scope, the destructor automatically released te mutex
 
     }
 
