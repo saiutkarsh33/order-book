@@ -84,10 +84,7 @@ void Engine::processBuyOrder(const ClientCommand& cmd) {
 } else if (cmd.type == input_sell) {
     newOrder.side = Side::SELL;
 }
- 
 
-    SyncCerr() << "Processing BUY order: " << newOrder.order_id << " for " 
-               << newOrder.instrument << " x " << newOrder.quantity << " @ " << newOrder.price << std::endl;	
 	
 	auto& sellPQ = sellOrderBooks[newOrder.instrument];
 
@@ -138,9 +135,6 @@ void Engine::processSellOrder(const ClientCommand& cmd) {
     newOrder.sequence = nextSequence++;
     newOrder.cancelled = false;  
 
-    SyncCerr() << "Processing SELL order: " << newOrder.order_id << " for " 
-               << newOrder.instrument << " x " << newOrder.quantity 
-               << " @ " << newOrder.price << std::endl;
 
     auto& buyPQ = buyOrderBooks[newOrder.instrument];
 
@@ -194,10 +188,6 @@ void Engine::processCancelOrder(const ClientCommand& cmd) {
     
     // Log the cancellation event.
     Output::OrderDeleted(orderId, cancelAccepted, timestamp);
-    
-    SyncCerr() << "Processed CANCEL order: " << orderId 
-               << " for instrument " << cmd.instrument 
-               << (cancelAccepted ? " (accepted)" : " (rejected)") << std::endl;
 }
 
 
@@ -215,10 +205,6 @@ void Engine::connection_thread(ClientConnection connection) {
             case ReadResult::Success:
                 break; 
         }
-
-        SyncCerr() << "Received command: " 
-                   << static_cast<char>(cmd.type) << " ID: " << cmd.order_id << std::endl;
-
         processClientCommand(cmd);
     }
 }

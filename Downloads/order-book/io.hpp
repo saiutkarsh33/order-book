@@ -1,5 +1,3 @@
-// This file contains definitions used by the provided I/O code.
-// There should be no need to modify this file.
 
 #pragma once
 

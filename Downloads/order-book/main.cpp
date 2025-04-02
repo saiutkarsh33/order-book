@@ -1,6 +1,3 @@
-// This file contains main() as well as the logic setting up the I/O.
-// There should be no need to modify this file.
-
 #include <stdio.h>
 #include <signal.h>
 #include <stddef.h>
