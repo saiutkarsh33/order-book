@@ -8,6 +8,13 @@
 
 #include "io.hpp"
 #include <queue>
+#include "InstrumentWorker.hpp"
+
+enum class Side {
+    BUY,
+    SELL
+};
+
 
 struct Engine
 {
@@ -30,7 +37,9 @@ private:
         uint32_t quantity;
         std::string instrument;
 		bool cancelled = false;
-        uint64_t sequence;  // increasing sequence for order of arrival
+        uint64_t sequence;
+		Side side;
+		// increasing sequence for order of arrival
     };
 
     // buy orders (max-heap: higher price first, then earlier sequence)
@@ -55,7 +64,19 @@ private:
     std::unordered_map<std::string, std::priority_queue<Order, std::vector<Order>, SellComparator>> sellOrderBooks;
 
 	// in cpp cannot have values that are Order& bc references cannot be reassigned 
+	// map order id to the order
 	std::unordered_map<uint32_t, Order*> orderMap;
+
+	// Value below must be a pointer to begin with because without a pointer, u have to copy the object itself
+
+	// Smart pointers vs Dumb pointers: smart clean up the resources once the obj its pointing at goes out of scope / reassigned
+
+	// Unique pointer is used below because: one owner, the engine
+
+	std::unordered_map<std::string, std::unique_ptr<InstrumentWorker>> instrumentWorkers;
+	std::mutex workerMutex;
+
+	InstrumentWorker* getInstrumentWorker(const std::string& instrument);
     
 	// sequence number of order
 	uint64_t nextSequence = 0;

@@ -20,23 +20,56 @@ void Engine::accept(ClientConnection connection)
 	thread.detach();
 }
 
-void Engine::processClientCommand(const ClientCommand& cmd) {
+// for the below function, we return a raw ptr instead of smare unique ptr stored in the map bc
+// unique ptr is move only, if u return that, the engine will no longer "own" the instrument worker anymore
 
-	switch (cmd.type) {
-		case input_buy:
-		     processBuyOrder(cmd);
-			 break;
-		case input_sell:
-		     processSellOrder(cmd);
-			 break;
-		case input_cancel:
-		     processCancelOrder(cmd);
-			 break;
-		default:
-		     SyncCerr() << "Unknown command type";
-			 break;
-	}
+InstrumentWorker* Engine::getInstrumentWorker(const std::string& instrument) {
+    std::lock_guard<std::mutex> lock(workerMutex);
+    auto it = instrumentWorkers.find(instrument);
+    if (it == instrumentWorkers.end()) {
+		// allocates the object dynamically and returned a unique ptr related to it
+		// ensures that lifetime of this InstrumentWorker is managed automatically
+        auto worker = std::make_unique<InstrumentWorker>(instrument);
+        InstrumentWorker* workerPtr = worker.get();
+        worker->start(this);  // Start its dedicated thread.
+		// map now exclusively owns the worker
+        instrumentWorkers[instrument] = std::move(worker);
+        return workerPtr;
+    }
+    return it->second.get();
 }
+
+// Instead of processing orders directly, delegate them to the appropriate InstrumentWorker.
+void Engine::processClientCommand(const ClientCommand& cmd) {
+    std::string instr(cmd.instrument);
+    if (cmd.type == input_cancel) {
+        // Lookup the order in orderMap to determine its side.
+        auto it = orderMap.find(cmd.order_id);
+        if (it != orderMap.end()) {
+            Order* order = it->second;
+            // Assume your Order structure has a flag to denote sell side.
+            if (order->side == Side::SELL) { // For sell orders, dispatch cancellation to sellQueue.
+                InstrumentWorker* worker = getInstrumentWorker(instr);
+                worker->sellQueue.push(cmd);
+            } else { // For buy orders, dispatch cancellation to buyQueue.
+                InstrumentWorker* worker = getInstrumentWorker(instr);
+                worker->buyQueue.push(cmd);
+            }
+        } else {
+            // If the order is not found, process cancellation immediately as rejected.
+            processCancelOrder(cmd);
+        }
+    } else if (cmd.type == input_buy) {
+        InstrumentWorker* worker = getInstrumentWorker(instr);
+        worker->buyQueue.push(cmd);
+    } else if (cmd.type == input_sell) {
+        InstrumentWorker* worker = getInstrumentWorker(instr);
+        worker->sellQueue.push(cmd);
+    } else {
+        SyncCerr() << "Unknown command type: " << static_cast<char>(cmd.type) << std::endl;
+    }
+}
+
 
 void Engine::processBuyOrder(const ClientCommand& cmd) {
 	// create a new Order based on the client command, better to use internal API 
@@ -46,9 +79,12 @@ void Engine::processBuyOrder(const ClientCommand& cmd) {
 	newOrder.quantity = cmd.count;
 	// c style string is auto converted to a std::string
 	newOrder.instrument = cmd.instrument;
+	if (cmd.type == input_buy) {
+    newOrder.side = Side::BUY;
+} else if (cmd.type == input_sell) {
+    newOrder.side = Side::SELL;
+}
 
-    SyncCerr() << "Processing BUY order: " << newOrder.order_id << " for " 
-               << newOrder.instrument << " x " << newOrder.quantity << " @ " << newOrder.price << std::endl;	
 	
 	auto& sellPQ = sellOrderBooks[newOrder.instrument];
 
@@ -99,9 +135,6 @@ void Engine::processSellOrder(const ClientCommand& cmd) {
     newOrder.sequence = nextSequence++;
     newOrder.cancelled = false;  
 
-    SyncCerr() << "Processing SELL order: " << newOrder.order_id << " for " 
-               << newOrder.instrument << " x " << newOrder.quantity 
-               << " @ " << newOrder.price << std::endl;
 
     auto& buyPQ = buyOrderBooks[newOrder.instrument];
 
@@ -140,7 +173,6 @@ void Engine::processSellOrder(const ClientCommand& cmd) {
 void Engine::processCancelOrder(const ClientCommand& cmd) {
     uint32_t orderId = cmd.order_id;
     
-    
     bool cancelAccepted = false;
     
     auto it = orderMap.find(orderId);
@@ -156,10 +188,6 @@ void Engine::processCancelOrder(const ClientCommand& cmd) {
     
     // Log the cancellation event.
     Output::OrderDeleted(orderId, cancelAccepted, timestamp);
-    
-    SyncCerr() << "Processed CANCEL order: " << orderId 
-               << " for instrument " << cmd.instrument 
-               << (cancelAccepted ? " (accepted)" : " (rejected)") << std::endl;
 }
 
 
@@ -177,10 +205,6 @@ void Engine::connection_thread(ClientConnection connection) {
             case ReadResult::Success:
                 break; 
         }
-
-        SyncCerr() << "Received command: " 
-                   << static_cast<char>(cmd.type) << " ID: " << cmd.order_id << std::endl;
-
         processClientCommand(cmd);
     }
 }
