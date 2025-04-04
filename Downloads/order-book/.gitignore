@@ -1,6 +1,0 @@
-engine
-client
-/build
-/.deps
-compile_commands.json
-.cache
