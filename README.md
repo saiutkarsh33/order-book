@@ -1,6 +1,6 @@
 ## Order Book
 
-A high-performance, low-latency order book engine implemented in C++ using Unix domain sockets for IPC.
+A high-performance, low-latency order book engine implemented in C++ that achieves client, instrument and side level concurrency.
 
 ## Usage
 
