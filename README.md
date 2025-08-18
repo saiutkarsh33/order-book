@@ -32,10 +32,6 @@ What it is: Each instrument (e.g., AAPL, GOOG) has a dedicated InstrumentWorker 
 
 Why it matters: Orders for different instruments are processed in isolation, preventing cross-instrument contention.
 
-3. Side-level Concurrency
 
-What it is: Within each InstrumentWorker, there are two threads—one for buy orders and one for sell orders.
-
-Why it matters: Buy and sell order matching for the same instrument can occur in parallel, avoiding serialization on a single thread.
 
 
