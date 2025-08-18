@@ -4,7 +4,6 @@
 #include <condition_variable>
 
 // Templates should be completely instantiated in header file so compiler can generate the appropriate instantiation
-
 template<typename T>
 class ThreadSafeQueue {
 public:
@@ -22,6 +21,7 @@ public:
          // dont have to acquire the other's conditional variable or mutex of course
     }
 
+
     // Move assignment operator
     ThreadSafeQueue& operator=(ThreadSafeQueue&& other) {
         if (this != &other) {
@@ -32,8 +32,12 @@ public:
         return *this;
     }
 
+
     // Destructor (default is sufficient since RAII types, mutex, cv, queue clean up their resources)
-    ~ThreadSafeQueue() = default;
+    ~ThreadSafeQueue() {
+        cv.notify_all();
+
+    }
 
     // Push a new item into the queue.
     // this is for when the caller indicates that the object remains valid state after this push
@@ -70,11 +74,12 @@ public:
         return true;
     }
 
+
     // Wait until an item is available, then pop it.
     // As you can see, there is no return value, you could use move smeantics in modern C++ to elimate most copy overhead
     // but this is consistent design for a thread safe queue implementation
     // I was thinking y not j return result then if used elsewhere use move semantics or just use the reference of the result but i guess its j a design pattern for cleaner code
-    void wait_pop(T& result) {
+    T wait_pop() {
         // locks the mutex to protect access to the underlying queue q
         // need to acquire lock bc want exclusive access to the queue when checking if empty, reading front and popping
         std::unique_lock<std::mutex> lock(mtx);
@@ -84,10 +89,10 @@ public:
         // this prevents busy waiting
         cv.wait(lock, [this]() { return !q.empty(); });
         // efficient transfer the elements resources to result instead of copying it
-        result = std::move(q.front());
+        T result(std::move(q.front()));
         q.pop();
+        return result;
         // once the function exits, the std:: unique lock goes out of scope, the destructor automatically released te mutex
-
     }
 
     // Can also have a wait_pop_for, if there is a timeout, then u can wake and thread can see if it shld exit for example
@@ -101,6 +106,6 @@ public:
 
 private:
     mutable std::mutex mtx;
-    std::queue<T> q;
+    std::queue<T> q; 
     std::condition_variable cv;
 };

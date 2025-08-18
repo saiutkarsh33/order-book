@@ -29,16 +29,13 @@ enum class ReadResult
 	Error
 };
 
-
-
-
 struct ClientConnection
 {
 	~ClientConnection() { this->freeHandle(); }
 	// explicit constructor
 	explicit ClientConnection(int handle) : m_handle(handle) { }
     
-	// move constructor, this takes the other's m handle and makes the other's m handle -1 
+	// move constructor, this takes the other's m handle and makes the other's m handle -1 , which is not a valid FD
 	// called when ClientConnection a(std::move(b)); or ClientConnection(std::move(b));
 	// Move constructor happens when constructing a brand-new object from an rvalue.
 
@@ -74,44 +71,49 @@ private:
 
 // An implementation of std::osyncstream{std::cout}
 // std::osyncstream would work but badly supported right now
-struct SyncCout
-{
-	static std::mutex mut;
-	std::scoped_lock<std::mutex> lock { SyncCout::mut };
+struct SyncCout {
+    static std::mutex mut;
+    std::lock_guard<std::mutex> lock;
 
-	template <typename T>
-	friend const SyncCout& operator<<(const SyncCout& s, T&& v)
-	{
-		std::cout << std::forward<T>(v);
-		return s;
-	}
+    SyncCout() : lock(mut) {}
+    SyncCout(const SyncCout&) = delete;
+    SyncCout& operator=(const SyncCout&) = delete;
+    SyncCout(SyncCout&&) = delete;
+    SyncCout& operator=(SyncCout&&) = delete;
 
-	friend const SyncCout& operator<<(const SyncCout& s, std::ostream& (*f)(std::ostream&) )
-	{
-		std::cout << f;
-		return s;
-	}
+    template <typename T>
+    SyncCout& operator<<(T&& v) {
+        std::cout << std::forward<T>(v);
+        return *this;
+    }
+    SyncCout& operator<<(std::ostream& (*f)(std::ostream&)) {
+        std::cout << f;
+        return *this;
+    }
 };
+
 
 // An implementation of std::osyncstream{std::cerr}
 // std::osyncstream would work but badly supported right now
-struct SyncCerr
-{
-	static std::mutex mut;
-	std::scoped_lock<std::mutex> lock { SyncCerr::mut };
+struct SyncCerr {
+    static std::mutex mut;
+    std::lock_guard<std::mutex> lock;
 
-	template <typename T>
-	friend const SyncCerr& operator<<(const SyncCerr& s, T&& v)
-	{
-		std::cerr << std::forward<T>(v);
-		return s;
-	}
+    SyncCerr() : lock(mut) {}
+    SyncCerr(const SyncCerr&) = delete;
+    SyncCerr& operator=(const SyncCerr&) = delete;
+    SyncCerr(SyncCerr&&) = delete;
+    SyncCerr& operator=(SyncCerr&&) = delete;
 
-	friend const SyncCerr& operator<<(const SyncCerr& s, std::ostream& (*f)(std::ostream&) )
-	{
-		std::cerr << f;
-		return s;
-	}
+    template <typename T>
+    SyncCerr& operator<<(T&& v) {
+        std::cerr << std::forward<T>(v);
+        return *this;
+    }
+    SyncCerr& operator<<(std::ostream& (*f)(std::ostream&)) {
+        std::cerr << f;
+        return *this;
+    }
 };
 
 class Output

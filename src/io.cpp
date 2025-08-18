@@ -19,7 +19,7 @@ void ClientConnection::freeHandle()
 {
 	if(m_handle != -1)
 	{   
-		// closes the file descriptor
+		// closes the file descriptor to prevent respurce leaks, file struct is still there, theres a maximum number of fds an os can have
 		close(m_handle);
 		m_handle = -1;
 	}
@@ -55,6 +55,7 @@ ReadResult ClientConnection::readInput(ClientCommand& read_into) {
     char buffer[bufferSize];
     
     ssize_t n = readLine(m_handle, buffer, bufferSize);
+    // If the client does ctrl D, n will be -1
     if (n < 0) {
         return ReadResult::Error;
     }
@@ -73,7 +74,9 @@ ReadResult ClientConnection::readInput(ClientCommand& read_into) {
         return ReadResult::Error;
     }
     
+    
     if (typeChar == 'B' || typeChar == 'S') {
+        // %8s puts up to 8 chars for instrument (fits my char instrument[9], leaving room for null terminator)
         int ret = sscanf(buffer, " %c %u %8s %u %u", &typeChar, &read_into.order_id, read_into.instrument, &read_into.price, &read_into.count);
         if (ret != 5) {
             return ReadResult::Error;
